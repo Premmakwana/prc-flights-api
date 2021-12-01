@@ -1,0 +1,157 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="31400a24-e837-45fa-a4ec-20b053a62d5d" >
+		<http:request-connection host="${request.host}" />
+	</http:request-config>
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="4cafd0ef-f00d-4df9-a6b2-63ded9fd3b29" >
+		<db:my-sql-connection host="${db.host}" port="${db.port}" user="${db.username}" password="${db.password}" database="${db.databasename}" />
+	</db:config>
+	<configuration-properties doc:name="Configuration properties" doc:id="f6b0ac53-07ef-4e9e-81cd-62e3dd4d12fd" file="config.yaml" />
+	<validation:config name="Validation_Config" doc:name="Validation Config" doc:id="97efd2e9-0115-4da5-9c20-d25c844159c7" />
+	<flow name="GetFlightsFlow" doc:id="247f3bce-f745-495a-a2d5-d7cf4f876b7a" >
+		<set-variable value="#[attributes.queryParams.origin]" doc:name="Origin" doc:id="a57f8fcd-136a-4589-a1a4-9e2e83c6a1b5" variableName="Source" />
+		<set-variable value="#[attributes.queryParams.destination]" doc:name="Destination" doc:id="9a54ec3f-8d78-4aa7-9412-fa61994b262c" variableName="Destination" />
+		<http:request method="GET" doc:name="Sys-api call" doc:id="2b55274c-fbc6-4ccf-a4d6-9bc079a6b2d9" config-ref="HTTP_Request_configuration" path="${request.path}">
+			<http:query-params><![CDATA[#[output application/java
+---
+{
+	origin : vars.Source,
+	destination : vars.Destination
+}]]]></http:query-params>
+		</http:request>
+		<ee:transform doc:name="Transform Message" doc:id="bd79a280-30f0-4cc9-a357-cd3ac3019dc1">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+if(payload == []) null else payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<try doc:name="Try" doc:id="91d9026a-802d-46e4-b4f0-82a9cae47edd">
+			<validation:is-not-null doc:id="27a088c9-4961-4adf-b70d-b256c548894d" config-ref="Validation_Config" value="#[payload]" doc:name="Validation" />
+			<error-handler>
+				<on-error-continue enableNotifications="true" logException="true" doc:name="Error Continue" doc:id="6c221a03-ec29-495c-8c7b-8d70b818b66b" type="VALIDATION:NULL">
+					<set-payload value='#["flight not Available"]' doc:name="Error payload" doc:id="08895e7f-631f-4e5a-b55f-6f789cb5bb52" />
+				</on-error-continue>
+			</error-handler>
+		</try>
+		<ee:transform doc:name="Transform Message" doc:id="a99d51ae-e740-43f9-8adf-ae128d9ca73f">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="BookFlightFlow" doc:id="fed7ab42-bf09-48ef-9c46-1ea84d9e49df" >
+		<set-variable value="#[attributes.queryParams.origin]" doc:name="Source" doc:id="e130c19f-4347-4576-bafd-05f121270e87" variableName="Source" />
+		<set-variable value="#[attributes.queryParams.destination]" doc:name="Destination" doc:id="22f9254d-633c-4e8e-8cfd-fa2cdd2c4c3f" variableName="Destination" />
+		<set-variable value="#[attributes.queryParams.ID]" doc:name="ID" doc:id="ee0915d7-daec-48c5-9f0d-3f0a5b335bb3" variableName="ID" />
+		<http:request method="GET" doc:name="Sys-api call" doc:id="b9f0743d-5cb3-415e-9ac6-9e407502f23a" config-ref="HTTP_Request_configuration" path="/api/flights">
+			<http:query-params><![CDATA[#[output application/java
+---
+{
+	origin : vars.Source,
+	destination : vars.Destination
+}]]]></http:query-params>
+		</http:request>
+		<ee:transform doc:name="Transform Message" doc:id="cd6cdd66-0aa6-4c97-a8bb-e9ba67a81833">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<set-variable value="#[payload.Seats[0]]" doc:name="Seats" doc:id="0b3dc009-19c1-46c1-88cd-1631cd22d872" variableName="Seats" />
+		<choice doc:name="Seats Availablity check" doc:id="8711368a-4e73-4bc4-95bd-9beb80170f9b">
+			<when expression="#[(vars.Seats &gt; 0)]">
+				<http:request method="POST" doc:name="Booking Flights" doc:id="4d33f33b-ccfa-4e20-a6d4-ca2b9baac509" config-ref="HTTP_Request_configuration" path="/api/Book">
+					<http:query-params><![CDATA[#[{
+	origin : vars.Source,
+	destination : vars.Destination,
+	ID : vars.ID
+}]]]></http:query-params>
+				</http:request>
+				<db:update doc:name="Update" doc:id="ca83cd74-7f49-477f-a454-b41246912414" config-ref="Database_Config">
+					<db:sql><![CDATA[update bookmyholiday.FLIGHT 
+SET
+SEATS = SEATS - 1
+WHERE SOURCE = :source AND
+DESTINATION =:Destination]]></db:sql>
+					<db:input-parameters><![CDATA[#[{
+	source : vars.Source,
+	Destination : vars.Destination
+}]]]></db:input-parameters>
+				</db:update>
+				<ee:transform doc:name="Transform Message" doc:id="b78ad91b-3dc6-4cb6-b9c9-61d94faef5df">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+"Dear Customer Flight Booked with ID" : vars.ID,
+ "From" : vars.Source,
+ "To" : vars.Destination,
+ "Happy" : "Journey"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</when>
+			<otherwise>
+				<ee:transform doc:name="Transform Message" doc:id="a48ec056-d40b-42a2-8cb4-4c36d73afd9f">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+"No Seats available for the Flight"]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</otherwise>
+		</choice>
+	</flow>
+	<flow name="CancelFlightFlow" doc:id="341216d2-d661-42f2-bbec-935b1832d982" >
+		<set-variable value="#[attributes.queryParams.origin]" doc:name="Source" doc:id="aea8fbcd-a226-44c3-a4ae-4ae88556c349" variableName="Source" />
+		<set-variable value="#[attributes.queryParams.destination]" doc:name="Destination" doc:id="b7a24da6-d3c7-49b0-aef7-562ad71524fd" variableName="Destination" />
+		<set-variable value="#[attributes.queryParams.ID]" doc:name="ID" doc:id="538f7f57-93c0-4378-a89b-7a1a6cb6950d" variableName="ID" />
+		<db:update doc:id="6067ee95-118b-4536-9037-65e7478a7e4f" config-ref="Database_Config" doc:name="Cancelling Flight">
+			<db:sql><![CDATA[update bookmyholiday.FLIGHT 
+SET
+SEATS = SEATS + 1
+WHERE SOURCE = :source AND
+DESTINATION =:Destination]]></db:sql>
+			<db:input-parameters><![CDATA[#[{
+	source : vars.Source,
+	Destination : vars.Destination
+}]]]></db:input-parameters>
+		</db:update>
+		<http:request method="POST" doc:name="Request" doc:id="36a6433e-5064-4e0e-89dc-69a5b3ab42f9" config-ref="HTTP_Request_configuration" path="/api/Cancel">
+			<http:query-params><![CDATA[#[{
+	origin : vars.Source,
+	destination : vars.Destination,
+	ID : vars.ID
+}]]]></http:query-params>
+		</http:request>
+		<ee:transform doc:name="Transform Message" doc:id="888ff781-d472-4756-9eee-4b8f07699170">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+"Dear Customer Flight Cancelled For you with ID" : vars.ID,
+ "From" : vars.Source,
+ "To" : vars.Destination
+ 
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+</mule>

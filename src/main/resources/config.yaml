@@ -1,0 +1,10 @@
+request:
+ host: "sys-book-my-flight-api.us-e2.cloudhub.io"
+ path: "/api/flights"
+ 
+db:
+ host: "database-1.cmbzenyvghde.us-east-2.rds.amazonaws.com"
+ port: "3306"
+ username: "admin"
+ password: ".adgjmps055"
+ databasename: "bookmyholiday"

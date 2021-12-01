@@ -1,0 +1,4 @@
+%dw 2.0
+
+type auto_fed7ab42_bf09_48ef_9c46_1ea84d9e49df_Output_Variables_Seats = Any
+
